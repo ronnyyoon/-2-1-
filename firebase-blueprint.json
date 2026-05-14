@@ -1,0 +1,76 @@
+{
+  "entities": {
+    "Subject": {
+      "title": "Subject",
+      "description": "Definition of a school subject",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "units": { "type": "number" },
+        "average": { "type": "number" }
+      },
+      "required": ["id", "name", "units"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student score information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "class": { "type": "string" },
+        "number": { "type": "string" },
+        "scores": {
+          "type": "object",
+          "description": "Map of subjectId to score"
+        }
+      },
+      "required": ["id", "name", "scores"]
+    },
+    "HistoricalGPA": {
+      "title": "Historical GPA",
+      "description": "Past grade point averages for a student",
+      "type": "object",
+      "properties": {
+        "1-1-5": { "type": "number" },
+        "1-1-9": { "type": "number" },
+        "1-2-5": { "type": "number" },
+        "1-2-9": { "type": "number" }
+      }
+    },
+    "CollegeAdmission": {
+      "title": "College Admission",
+      "description": "Historical college admission data for prediction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "admissionGrade": { "type": "number" },
+        "university": { "type": "string" },
+        "selectionType": { "type": "string" },
+        "detailType": { "type": "string" },
+        "department": { "type": "string" },
+        "admissionType": { "type": "string", "enum": ["합격", "충원합격"] }
+      },
+      "required": ["id", "admissionGrade", "university", "department", "admissionType"]
+    }
+  },
+  "firestore": {
+    "config/subjects": {
+      "schema": "Subject",
+      "description": "List of available subjects"
+    },
+    "students/{studentId}": {
+      "schema": "Student",
+      "description": "Student record with current scores"
+    },
+    "historical_data/{studentId}": {
+      "schema": "HistoricalGPA",
+      "description": "Historical grades for a student"
+    },
+    "college_admissions/{admissionId}": {
+      "schema": "CollegeAdmission",
+      "description": "Historical college admission results"
+    }
+  }
+}

@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Collections ---
+
+    // Config/Subjects
+    match /config/subjects {
+      allow read: if isSignedIn();
+      allow write: if false; // System/Admin only (manual for now)
+    }
+
+    // Students
+    match /students/{studentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidStudent(incoming()) && isValidId(studentId);
+      allow update: if isSignedIn() && isValidStudent(incoming()) && (
+        // Only allow updating scores for now
+        incoming().diff(existing()).affectedKeys().hasOnly(['scores'])
+      );
+      allow delete: if false;
+    }
+
+    function isValidStudent(data) {
+      return data.id is string && data.id.size() <= 10 &&
+             data.name is string && data.name.size() <= 20 &&
+             data.scores is map;
+    }
+
+    // Historical Data
+    match /historical_data/{studentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidHistorical(incoming()) && isValidId(studentId);
+      allow update: if isSignedIn() && isValidHistorical(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['1-1-5', '1-1-9', '1-2-5', '1-2-9'])
+      );
+    }
+
+    function isValidHistorical(data) {
+      return (data.get('1-1-5', 0) is number) &&
+             (data.get('1-1-9', 0) is number) &&
+             (data.get('1-2-5', 0) is number) &&
+             (data.get('1-2-9', 0) is number);
+    }
+  }
+}
