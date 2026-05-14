@@ -4,19 +4,27 @@ import { cn } from '@/src/lib/utils';
 import { APP_CONFIG } from '@/src/config';
 import { motion } from 'motion/react';
 
+import { useFirebase } from '@/src/lib/FirebaseContext';
+
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
 }
 
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
+  const { user, signOut } = useFirebase();
+  const isAdmin = user && !user.isAnonymous; // Simple check for now, can be more specific
+
   const menuItems = [
     { id: 'dashboard', label: '전체 일람표', icon: LayoutDashboard },
     { id: 'class-grades', label: '학반등급일람표', icon: ListFilter },
     { id: 'subject-stats', label: '과목별성적', icon: GraduationCap },
     { id: 'predictor', label: '개인별 성적분석', icon: Calculator },
-    { id: 'admin', label: '관리자 설정', icon: Settings },
   ];
+
+  if (isAdmin) {
+    menuItems.push({ id: 'admin', label: '관리자 설정', icon: Settings });
+  }
 
   return (
     <div className="w-64 h-full bg-white/5 backdrop-blur-xl flex flex-col border-r border-white/10 z-20">
@@ -61,12 +69,18 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
       </nav>
 
       <div className="p-4 border-t border-white/10">
-        <button id="logout-btn" className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-red-400 transition-colors w-full group">
-          <div className="p-2 rounded-lg bg-white/5 group-hover:bg-red-500/10 transition-colors">
-            <LogOut size={18} />
-          </div>
-          <span className="font-semibold text-sm">로그아웃</span>
-        </button>
+        {user && !user.isAnonymous && (
+          <button 
+            id="logout-btn" 
+            onClick={signOut}
+            className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-red-400 transition-colors w-full group"
+          >
+            <div className="p-2 rounded-lg bg-white/5 group-hover:bg-red-500/10 transition-colors">
+              <LogOut size={18} />
+            </div>
+            <span className="font-semibold text-sm">로그아웃</span>
+          </button>
+        )}
       </div>
     </div>
   );

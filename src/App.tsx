@@ -17,7 +17,7 @@ import { useFirebase } from './lib/FirebaseContext';
 import { cn } from './lib/utils';
 
 export default function App() {
-  const { students: STUDENTS, isLoading, user, signOut } = useFirebase();
+  const { students: STUDENTS, isLoading, user, signIn, signOut } = useFirebase();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -76,11 +76,16 @@ export default function App() {
     );
   }
 
-  if (!user) {
-    return <Login />;
+  if (!user && isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-[#0f172a] text-white">
+        <Loader2 className="animate-spin text-blue-500 mb-4" size={48} />
+        <p className="text-xl font-bold animate-pulse">접속 준비 중입니다...</p>
+      </div>
+    );
   }
 
-  if (!currentStudent) {
+  if (!currentStudent && !isLoading) {
      return (
         <div className="flex items-center justify-center h-screen bg-[#0f172a] text-white">
            <p>데이터가 없습니다.</p>
@@ -230,13 +235,24 @@ export default function App() {
                 <p className="text-sm font-bold text-slate-100 group-hover:text-blue-400 transition-colors uppercase">{currentStudent.name}</p>
                 <p className="text-[10px] text-slate-400 font-bold tracking-tight">{currentStudent.class} {currentStudent.number}번</p>
               </div>
-              <button 
-                onClick={signOut}
-                className="h-10 w-10 bg-blue-600/20 text-blue-400 rounded-full flex items-center justify-center border border-white/10 shadow-sm ring-1 ring-blue-500/20 hover:bg-red-500/20 hover:text-red-400 transition-all"
-                title="로그아웃"
-              >
-                <LogOut size={20} />
-              </button>
+              {user && !user.isAnonymous && (
+                <button 
+                  onClick={signOut}
+                  className="h-10 w-10 bg-blue-600/20 text-blue-400 rounded-full flex items-center justify-center border border-white/10 shadow-sm ring-1 ring-blue-500/20 hover:bg-red-500/20 hover:text-red-400 transition-all"
+                  title="로그아웃"
+                >
+                  <LogOut size={20} />
+                </button>
+              )}
+              {user?.isAnonymous && (
+                 <button 
+                   onClick={signIn}
+                   className="h-10 w-10 bg-white/5 text-slate-500 rounded-full flex items-center justify-center border border-white/10 shadow-sm hover:bg-white/10 hover:text-blue-400 transition-all"
+                   title="관리자 로그인"
+                 >
+                    <User size={20} />
+                 </button>
+              )}
             </div>
           </div>
         </header>

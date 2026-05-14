@@ -9,7 +9,7 @@ import {
   writeBatch 
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User, signInAnonymously } from 'firebase/auth';
 import { Student, SubjectInfo, DetailedSubjectStats, CollegeAdmission } from '../types';
 import { SUBJECTS as LOCAL_SUBJECTS, STUDENTS as LOCAL_STUDENTS } from '../data';
 import { HISTORICAL_GPAS as LOCAL_HISTORY } from '../historical_data';
@@ -235,7 +235,11 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       if (!u) {
-        setIsLoading(false); // Stop loading so user can see sign in button
+        // Automatically sign in anonymously if no user is present
+        signInAnonymously(auth).catch(err => {
+          console.error("Anonymous sign-in failed:", err);
+          setIsLoading(false);
+        });
       }
     });
     return () => unsubscribe();
