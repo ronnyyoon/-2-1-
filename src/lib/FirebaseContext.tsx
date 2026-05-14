@@ -246,133 +246,120 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-
     async function fetchData() {
+      setIsLoading(true); // Ensure loading is true when starting fetch
       try {
         const batch = writeBatch(db);
         let needsSeeding = false;
 
         // 1. Fetch Subjects
         const subjectPath = 'config/subjects/list';
-        let subjectSnap;
-        try {
-          subjectSnap = await getDocs(collection(db, subjectPath));
-        } catch (error) {
-          handleFirestoreError(error, OperationType.LIST, subjectPath);
-        }
-
         let fetchedSubjects: SubjectInfo[] = [];
-        if (subjectSnap.empty) {
-          needsSeeding = true;
-          for (const sub of LOCAL_SUBJECTS) {
-            batch.set(doc(db, subjectPath, sub.id), sub);
+        try {
+          const subjectSnap = await getDocs(collection(db, subjectPath));
+          if (subjectSnap.empty) {
+            needsSeeding = true;
+            for (const sub of LOCAL_SUBJECTS) {
+              batch.set(doc(db, subjectPath, sub.id), sub);
+            }
+            fetchedSubjects = LOCAL_SUBJECTS;
+          } else {
+            fetchedSubjects = subjectSnap.docs.map(d => d.data() as SubjectInfo);
           }
+        } catch (error) {
+          console.warn("Failed to fetch subjects, using local data:", error);
           fetchedSubjects = LOCAL_SUBJECTS;
-        } else {
-          fetchedSubjects = subjectSnap.docs.map(d => d.data() as SubjectInfo);
         }
         setSubjects(fetchedSubjects);
 
         // 2. Fetch Students
         const studentPath = 'students';
-        let studentSnap;
-        try {
-          studentSnap = await getDocs(collection(db, studentPath));
-        } catch (error) {
-          handleFirestoreError(error, OperationType.LIST, studentPath);
-        }
-
         let fetchedStudents: Student[] = [];
-        if (studentSnap.size < LOCAL_STUDENTS.length) {
-          needsSeeding = true;
-          for (const s of LOCAL_STUDENTS) {
-             batch.set(doc(db, studentPath, s.id), s);
+        try {
+          const studentSnap = await getDocs(collection(db, studentPath));
+          if (studentSnap.size < LOCAL_STUDENTS.length) {
+            needsSeeding = true;
+            for (const s of LOCAL_STUDENTS) {
+               batch.set(doc(db, studentPath, s.id), s);
+            }
+            fetchedStudents = LOCAL_STUDENTS;
+          } else {
+            fetchedStudents = studentSnap.docs.map(d => d.data() as Student);
           }
+        } catch (error) {
+          console.warn("Failed to fetch students, using local data:", error);
           fetchedStudents = LOCAL_STUDENTS;
-        } else {
-          fetchedStudents = studentSnap.docs.map(d => d.data() as Student);
         }
         setStudents(fetchedStudents.sort((a,b) => a.id.localeCompare(b.id)));
 
         // 3. Fetch History
         const historyPath = 'historical_data';
-        let historySnap;
-        try {
-          historySnap = await getDocs(collection(db, historyPath));
-        } catch (error) {
-          handleFirestoreError(error, OperationType.LIST, historyPath);
-        }
-
         let fetchedHistory: any = {};
-        const localKeys = Object.keys(LOCAL_HISTORY);
-        
-        // If database is empty or we want to ensure latest file data is synced
-        if (historySnap.empty) {
-          needsSeeding = true;
-          for (const id of localKeys) {
-            batch.set(doc(db, historyPath, id), LOCAL_HISTORY[id]);
-            fetchedHistory[id] = LOCAL_HISTORY[id];
-          }
-        } else {
-          // Normal load
-          historySnap.docs.forEach(d => {
-            fetchedHistory[d.id] = d.data();
-          });
-
-          // Check if key members (like 2101) match the new corrected records. 
-          // If not, we trigger a re-sync for everyone in the local file to fix errors.
-          const checkIds = ["2101", "2102", "2103"];
-          const needsCorrection = checkIds.some(id => {
-            const remote = fetchedHistory[id];
-            const local = LOCAL_HISTORY[id];
-            return !remote || remote["1-1-9"] !== local["1-1-9"] || remote["1-2-9"] !== local["1-2-9"];
-          });
-
-          if (needsCorrection) {
-            console.log("Detecting data mismatch in historical records. Syncing with corrected local data...");
+        try {
+          const historySnap = await getDocs(collection(db, historyPath));
+          const localKeys = Object.keys(LOCAL_HISTORY);
+          
+          if (historySnap.empty) {
             needsSeeding = true;
             for (const id of localKeys) {
               batch.set(doc(db, historyPath, id), LOCAL_HISTORY[id]);
               fetchedHistory[id] = LOCAL_HISTORY[id];
             }
+          } else {
+            historySnap.docs.forEach(d => { fetchedHistory[d.id] = d.data(); });
+
+            const checkIds = ["2101", "2102", "2103"];
+            const needsCorrection = checkIds.some(id => {
+              const remote = fetchedHistory[id];
+              const local = LOCAL_HISTORY[id];
+              return !remote || remote["1-1-9"] !== local["1-1-9"] || remote["1-2-9"] !== local["1-2-9"];
+            });
+
+            if (needsCorrection) {
+              needsSeeding = true;
+              for (const id of localKeys) {
+                batch.set(doc(db, historyPath, id), LOCAL_HISTORY[id]);
+                fetchedHistory[id] = LOCAL_HISTORY[id];
+              }
+            }
           }
+        } catch (error) {
+          console.warn("Failed to fetch history, using local data:", error);
+          fetchedHistory = LOCAL_HISTORY;
         }
         setHistoricalGpas(fetchedHistory);
 
         // 4. Fetch Admissions
         const admissionsPath = 'college_admissions';
-        let admissionsSnap;
-        try {
-          admissionsSnap = await getDocs(collection(db, admissionsPath));
-        } catch (error) {
-          handleFirestoreError(error, OperationType.LIST, admissionsPath);
-        }
-
         let fetchedAdmissions: CollegeAdmission[] = [];
-        if (admissionsSnap.empty) {
-          needsSeeding = true;
-          for (const adm of LOCAL_ADMISSIONS) {
-            batch.set(doc(db, admissionsPath, adm.id), adm);
+        try {
+          const admissionsSnap = await getDocs(collection(db, admissionsPath));
+          if (admissionsSnap.empty) {
+            needsSeeding = true;
+            for (const adm of LOCAL_ADMISSIONS) {
+              batch.set(doc(db, admissionsPath, adm.id), adm);
+            }
+            fetchedAdmissions = LOCAL_ADMISSIONS;
+          } else {
+            fetchedAdmissions = admissionsSnap.docs.map(d => d.data() as CollegeAdmission);
           }
+        } catch (error) {
+          console.warn("Failed to fetch admissions, using local data:", error);
           fetchedAdmissions = LOCAL_ADMISSIONS;
-        } else {
-          fetchedAdmissions = admissionsSnap.docs.map(d => d.data() as CollegeAdmission);
         }
         setAdmissions(fetchedAdmissions);
 
-        if (needsSeeding) {
-          console.log("Seeding all data to Firebase...");
+        if (needsSeeding && user && !user.isAnonymous) {
+          console.log("Seeding data to Firebase (Admin Only)...");
           try {
             await batch.commit();
-            console.log("Seeding complete.");
           } catch (error) {
-            handleFirestoreError(error, OperationType.WRITE, "BATCH_SEED");
+            console.error("Seeding failed:", error);
           }
         }
 
       } catch (error) {
-        console.error("Firebase Initialization Error:", error);
+        console.error("General Fetching Error:", error);
       } finally {
         setIsLoading(false);
       }

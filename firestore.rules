@@ -27,14 +27,14 @@ service cloud.firestore {
 
     // Config/Subjects
     match /config/subjects/list/{subjectId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn(); // Allow initial seeding
       allow write: if isAdmin(); 
     }
 
     // Students
     match /students/{studentId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && isValidStudent(incoming()) && isValidId(studentId);
       allow update: if (isSignedIn() && isValidStudent(incoming())) && (
         isAdmin() || 
@@ -44,7 +44,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && (
+      return isSignedIn() && !request.auth.token.is_anonymous && (
         request.auth.token.email == "ronnyyoon0922@gmail.com" ||
         request.auth.token.email_verified == true && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
@@ -58,7 +58,7 @@ service cloud.firestore {
 
     // Historical Data
     match /historical_data/{studentId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && isValidHistorical(incoming()) && isValidId(studentId);
       allow update: if isSignedIn() && isValidHistorical(incoming()) && (
         incoming().diff(existing()).affectedKeys().hasOnly(['1-1-5', '1-1-9', '1-2-5', '1-2-9'])
@@ -73,7 +73,7 @@ service cloud.firestore {
     }
 
     match /college_admissions/{admissionId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn(); 
       allow write: if isAdmin();
     }
