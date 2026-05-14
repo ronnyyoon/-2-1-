@@ -72,26 +72,6 @@ export default function App() {
     return STUDENTS.find(s => s.id === (selectedStudentId || STUDENTS[0].id)) || STUDENTS[0];
   }, [selectedStudentId, STUDENTS]);
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-[#0f172a] text-white">
-        <Loader2 className="animate-spin text-blue-500 mb-4" size={48} />
-        <p className="text-xl font-bold animate-pulse">데이터를 불러오는 중입니다...</p>
-        <p className="text-sm text-slate-500 mt-2">Firebase와 연동하여 실시간 성적 데이터를 동기화하고 있습니다.</p>
-      </div>
-    );
-  }
-
-  if (!currentStudent) {
-    // This case should be rare now with our data fallback in FirebaseContext
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-[#0f172a] text-white">
-        <p className="text-xl font-bold">오프라인 모드 데이터 로딩 중...</p>
-        <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-blue-600 rounded-lg">새로고침</button>
-      </div>
-    );
-  }
-
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':

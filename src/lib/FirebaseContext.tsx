@@ -11,7 +11,7 @@ import {
 import { db, auth } from './firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
 import { Student, SubjectInfo, DetailedSubjectStats, CollegeAdmission } from '../types';
-import { SUBJECTS as LOCAL_SUBJECTS, STUDENTS as LOCAL_STUDENTS } from '../data';
+import { SUBJECTS as LOCAL_SUBJECTS, STUDENTS as LOCAL_STUDENTS, ALL_STATS } from '../data';
 import { HISTORICAL_GPAS as LOCAL_HISTORY } from '../historical_data';
 import { ADMISSIONS_DATA as LOCAL_ADMISSIONS } from '../admissions_data';
 
@@ -96,12 +96,12 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 export function FirebaseProvider({ children }: { children: React.ReactNode }) {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [subjects, setSubjects] = useState<SubjectInfo[]>([]);
-  const [historicalGpas, setHistoricalGpas] = useState<{ [key: string]: any }>({});
-  const [admissions, setAdmissions] = useState<CollegeAdmission[]>([]);
+  const [students, setStudents] = useState<Student[]>(LOCAL_STUDENTS);
+  const [subjects, setSubjects] = useState<SubjectInfo[]>(LOCAL_SUBJECTS);
+  const [historicalGpas, setHistoricalGpas] = useState<{ [key: string]: any }>(LOCAL_HISTORY);
+  const [admissions, setAdmissions] = useState<CollegeAdmission[]>(LOCAL_ADMISSIONS);
   const [isLoading, setIsLoading] = useState(true);
-  const [dataLoaded, setDataLoaded] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(true); // Set to true by default since we have local data
   const [user, setUser] = useState<User | null>(null);
   const [isLegacyAdmin, setIsLegacyAdmin] = useState(() => {
     return localStorage.getItem('isLegacyAdmin') === 'true';
@@ -119,7 +119,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   };
 
   const adminLogin = (id: string, pw: string) => {
-    if (id === "여수고2학년" && pw === "123456789") {
+    if (id === "여수고2학년실" && pw === "123456789") {
       setIsLegacyAdmin(true);
       localStorage.setItem('isLegacyAdmin', 'true');
       return true;
@@ -175,7 +175,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
 
   const allStats = useMemo(() => {
     const stats: { [key: string]: DetailedSubjectStats } = {};
-    if (subjects.length === 0 || students.length === 0) return stats;
+    if (subjects.length === 0 || students.length === 0) return ALL_STATS; // Fallback to ALL_STATS if empty
 
     subjects.forEach(sub => {
       const scores = students.map(s => s.scores[sub.id]).filter((s): s is number => s !== null);
@@ -391,7 +391,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     }
 
     fetchData();
-  }, []);
+  }, [user]);
 
   return (
     <FirebaseContext.Provider value={{ 
@@ -400,7 +400,7 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       historicalGpas, 
       admissions, 
       allStats, 
-      isLoading: isLoading || !dataLoaded, 
+      isLoading: !dataLoaded, 
       user, 
       isLegacyAdmin,
       signIn, 

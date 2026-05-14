@@ -20,11 +20,8 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
     { id: 'class-grades', label: '학반등급일람표', icon: ListFilter },
     { id: 'subject-stats', label: '과목별성적', icon: GraduationCap },
     { id: 'predictor', label: '개인별 성적분석', icon: Calculator },
+    { id: 'admin', label: '관리자 설정', icon: Settings },
   ];
-
-  if (isAdmin) {
-    menuItems.push({ id: 'admin', label: '관리자 설정', icon: Settings });
-  }
 
   return (
     <div className="w-64 h-full bg-white/5 backdrop-blur-xl flex flex-col border-r border-white/10 z-20">
@@ -69,7 +66,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
       </nav>
 
       <div className="p-4 border-t border-white/10">
-        {user && !user.isAnonymous && (
+        {(user || isLegacyAdmin) && (
           <button 
             id="logout-btn" 
             onClick={signOut}

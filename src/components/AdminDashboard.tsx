@@ -32,10 +32,15 @@ export default function AdminDashboard() {
     updateStudent, 
     updateSubject, 
     updateAdmission, 
-    updateHistory 
+    updateHistory,
+    isLegacyAdmin,
+    user,
+    adminLogin,
+    signOut
   } = useFirebase();
 
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const isAdminAuthenticated = (user && !user.isAnonymous) || isLegacyAdmin;
+
   const [adminId, setAdminId] = useState('');
   const [adminPw, setAdminPw] = useState('');
   const [error, setError] = useState('');
@@ -52,8 +57,7 @@ export default function AdminDashboard() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminId === '여수고2학년' && adminPw === '123456789') {
-      setIsAuthenticated(true);
+    if (adminLogin(adminId, adminPw)) {
       setError('');
     } else {
       setError('아이디 또는 비밀번호가 일치하지 않습니다.');
@@ -267,7 +271,7 @@ export default function AdminDashboard() {
     );
   };
 
-  if (!isAuthenticated) {
+  if (!isAdminAuthenticated) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <motion.div 
@@ -337,7 +341,7 @@ export default function AdminDashboard() {
           <p className="text-slate-400 text-sm mt-1">시스템 전역 설정 및 플랫폼 커스터마이징</p>
         </div>
         <button 
-          onClick={() => setIsAuthenticated(false)}
+          onClick={signOut}
           className="px-4 py-2 bg-white/5 text-slate-400 hover:text-white rounded-lg text-xs font-bold border border-white/5 transition-all"
         >
           관리자 로그아웃
