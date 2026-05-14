@@ -9,11 +9,24 @@ import {
   writeBatch 
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User, signInAnonymously } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
 import { Student, SubjectInfo, DetailedSubjectStats, CollegeAdmission } from '../types';
 import { SUBJECTS as LOCAL_SUBJECTS, STUDENTS as LOCAL_STUDENTS } from '../data';
 import { HISTORICAL_GPAS as LOCAL_HISTORY } from '../historical_data';
 import { ADMISSIONS_DATA as LOCAL_ADMISSIONS } from '../admissions_data';
+
+// Connection test as per guidelines
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'config', 'subjects'));
+    console.log("Firebase connection established.");
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('offline')) {
+      console.warn("Firestore client is offline.");
+    }
+  }
+}
+testConnection();
 
 interface FirebaseContextType {
   students: Student[];
@@ -23,7 +36,9 @@ interface FirebaseContextType {
   allStats: { [key: string]: DetailedSubjectStats };
   isLoading: boolean;
   user: User | null;
+  isLegacyAdmin: boolean;
   signIn: () => Promise<void>;
+  adminLogin: (id: string, pw: string) => boolean;
   signOut: () => Promise<void>;
   updateStudent: (student: Student) => Promise<void>;
   updateSubject: (subject: SubjectInfo) => Promise<void>;
@@ -86,7 +101,13 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   const [historicalGpas, setHistoricalGpas] = useState<{ [key: string]: any }>({});
   const [admissions, setAdmissions] = useState<CollegeAdmission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [isLegacyAdmin, setIsLegacyAdmin] = useState(() => {
+    return localStorage.getItem('isLegacyAdmin') === 'true';
+  });
+
+  const fetchIdRef = React.useRef(0);
 
   const signIn = async () => {
     const provider = new GoogleAuthProvider();
@@ -97,9 +118,20 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const adminLogin = (id: string, pw: string) => {
+    if (id === "여수고2학년" && pw === "123456789") {
+      setIsLegacyAdmin(true);
+      localStorage.setItem('isLegacyAdmin', 'true');
+      return true;
+    }
+    return false;
+  };
+
   const signOut = async () => {
     try {
       await auth.signOut();
+      setIsLegacyAdmin(false);
+      localStorage.removeItem('isLegacyAdmin');
     } catch (error) {
       console.error("Error signing out:", error);
     }
@@ -234,20 +266,16 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (!u) {
-        // Automatically sign in anonymously if no user is present
-        signInAnonymously(auth).catch(err => {
-          console.error("Anonymous sign-in failed:", err);
-          setIsLoading(false);
-        });
-      }
+      setIsLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
+    const currentFetchId = ++fetchIdRef.current;
+    
     async function fetchData() {
-      setIsLoading(true); // Ensure loading is true when starting fetch
+      console.log("Starting data fetch...");
       try {
         const batch = writeBatch(db);
         let needsSeeding = false;
@@ -259,18 +287,15 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
           const subjectSnap = await getDocs(collection(db, subjectPath));
           if (subjectSnap.empty) {
             needsSeeding = true;
-            for (const sub of LOCAL_SUBJECTS) {
-              batch.set(doc(db, subjectPath, sub.id), sub);
-            }
+            for (const sub of LOCAL_SUBJECTS) { batch.set(doc(db, subjectPath, sub.id), sub); }
             fetchedSubjects = LOCAL_SUBJECTS;
           } else {
             fetchedSubjects = subjectSnap.docs.map(d => d.data() as SubjectInfo);
           }
         } catch (error) {
-          console.warn("Failed to fetch subjects, using local data:", error);
+          console.warn("Using local subjects:", error);
           fetchedSubjects = LOCAL_SUBJECTS;
         }
-        setSubjects(fetchedSubjects);
 
         // 2. Fetch Students
         const studentPath = 'students';
@@ -279,18 +304,15 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
           const studentSnap = await getDocs(collection(db, studentPath));
           if (studentSnap.size < LOCAL_STUDENTS.length) {
             needsSeeding = true;
-            for (const s of LOCAL_STUDENTS) {
-               batch.set(doc(db, studentPath, s.id), s);
-            }
+            for (const s of LOCAL_STUDENTS) { batch.set(doc(db, studentPath, s.id), s); }
             fetchedStudents = LOCAL_STUDENTS;
           } else {
             fetchedStudents = studentSnap.docs.map(d => d.data() as Student);
           }
         } catch (error) {
-          console.warn("Failed to fetch students, using local data:", error);
+          console.warn("Using local students:", error);
           fetchedStudents = LOCAL_STUDENTS;
         }
-        setStudents(fetchedStudents.sort((a,b) => a.id.localeCompare(b.id)));
 
         // 3. Fetch History
         const historyPath = 'historical_data';
@@ -298,7 +320,6 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
         try {
           const historySnap = await getDocs(collection(db, historyPath));
           const localKeys = Object.keys(LOCAL_HISTORY);
-          
           if (historySnap.empty) {
             needsSeeding = true;
             for (const id of localKeys) {
@@ -307,14 +328,11 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
             }
           } else {
             historySnap.docs.forEach(d => { fetchedHistory[d.id] = d.data(); });
-
-            const checkIds = ["2101", "2102", "2103"];
-            const needsCorrection = checkIds.some(id => {
+            const needsCorrection = ["2101", "2102", "2103"].some(id => {
               const remote = fetchedHistory[id];
               const local = LOCAL_HISTORY[id];
               return !remote || remote["1-1-9"] !== local["1-1-9"] || remote["1-2-9"] !== local["1-2-9"];
             });
-
             if (needsCorrection) {
               needsSeeding = true;
               for (const id of localKeys) {
@@ -324,10 +342,9 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
             }
           }
         } catch (error) {
-          console.warn("Failed to fetch history, using local data:", error);
+          console.warn("Using local history:", error);
           fetchedHistory = LOCAL_HISTORY;
         }
-        setHistoricalGpas(fetchedHistory);
 
         // 4. Fetch Admissions
         const admissionsPath = 'college_admissions';
@@ -336,37 +353,45 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
           const admissionsSnap = await getDocs(collection(db, admissionsPath));
           if (admissionsSnap.empty) {
             needsSeeding = true;
-            for (const adm of LOCAL_ADMISSIONS) {
-              batch.set(doc(db, admissionsPath, adm.id), adm);
-            }
+            for (const adm of LOCAL_ADMISSIONS) { batch.set(doc(db, admissionsPath, adm.id), adm); }
             fetchedAdmissions = LOCAL_ADMISSIONS;
           } else {
             fetchedAdmissions = admissionsSnap.docs.map(d => d.data() as CollegeAdmission);
           }
         } catch (error) {
-          console.warn("Failed to fetch admissions, using local data:", error);
+          console.warn("Using local admissions:", error);
           fetchedAdmissions = LOCAL_ADMISSIONS;
         }
-        setAdmissions(fetchedAdmissions);
 
-        if (needsSeeding && user && !user.isAnonymous) {
-          console.log("Seeding data to Firebase (Admin Only)...");
-          try {
-            await batch.commit();
-          } catch (error) {
-            console.error("Seeding failed:", error);
+        if (currentFetchId === fetchIdRef.current) {
+          setSubjects(fetchedSubjects);
+          setStudents(fetchedStudents.sort((a,b) => a.id.localeCompare(b.id)));
+          setHistoricalGpas(fetchedHistory);
+          setAdmissions(fetchedAdmissions);
+          setDataLoaded(true);
+
+          if (needsSeeding && auth.currentUser && !auth.currentUser.isAnonymous) {
+            batch.commit().catch(e => console.error("Seeding failed:", e));
           }
         }
-
       } catch (error) {
         console.error("General Fetching Error:", error);
+        if (currentFetchId === fetchIdRef.current) {
+          setSubjects(LOCAL_SUBJECTS);
+          setStudents(LOCAL_STUDENTS);
+          setHistoricalGpas(LOCAL_HISTORY);
+          setAdmissions(LOCAL_ADMISSIONS);
+          setDataLoaded(true);
+        }
       } finally {
-        setIsLoading(false);
+        if (currentFetchId === fetchIdRef.current) {
+          setIsLoading(false);
+        }
       }
     }
 
     fetchData();
-  }, [user]);
+  }, []);
 
   return (
     <FirebaseContext.Provider value={{ 
@@ -375,9 +400,11 @@ export function FirebaseProvider({ children }: { children: React.ReactNode }) {
       historicalGpas, 
       admissions, 
       allStats, 
-      isLoading, 
+      isLoading: isLoading || !dataLoaded, 
       user, 
+      isLegacyAdmin,
       signIn, 
+      adminLogin,
       signOut,
       updateStudent,
       updateSubject,

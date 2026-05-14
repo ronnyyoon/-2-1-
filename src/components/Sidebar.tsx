@@ -12,8 +12,8 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
-  const { user, signOut } = useFirebase();
-  const isAdmin = user && !user.isAnonymous; // Simple check for now, can be more specific
+  const { user, isLegacyAdmin, signOut } = useFirebase();
+  const isAdmin = (user && !user.isAnonymous) || isLegacyAdmin;
 
   const menuItems = [
     { id: 'dashboard', label: '전체 일람표', icon: LayoutDashboard },

@@ -17,13 +17,19 @@ import { useFirebase } from './lib/FirebaseContext';
 import { cn } from './lib/utils';
 
 export default function App() {
-  const { students: STUDENTS, isLoading, user, signIn, signOut } = useFirebase();
+  const { students: STUDENTS, isLoading, user, isLegacyAdmin, signIn, signOut } = useFirebase();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [expandedClasses, setExpandedClasses] = useState<string[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (activeTab === 'login' && (user || isLegacyAdmin)) {
+      setActiveTab(isLegacyAdmin ? 'admin' : 'dashboard');
+    }
+  }, [user, isLegacyAdmin, activeTab]);
 
   const toggleClass = (className: string) => {
     setExpandedClasses(prev => 
@@ -76,21 +82,14 @@ export default function App() {
     );
   }
 
-  if (!user && isLoading) {
+  if (!currentStudent) {
+    // This case should be rare now with our data fallback in FirebaseContext
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-[#0f172a] text-white">
-        <Loader2 className="animate-spin text-blue-500 mb-4" size={48} />
-        <p className="text-xl font-bold animate-pulse">접속 준비 중입니다...</p>
+        <p className="text-xl font-bold">오프라인 모드 데이터 로딩 중...</p>
+        <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-blue-600 rounded-lg">새로고침</button>
       </div>
     );
-  }
-
-  if (!currentStudent && !isLoading) {
-     return (
-        <div className="flex items-center justify-center h-screen bg-[#0f172a] text-white">
-           <p>데이터가 없습니다.</p>
-        </div>
-     );
   }
 
   const renderContent = () => {
@@ -105,6 +104,8 @@ export default function App() {
         return <IndividualAnalysis selectedStudentId={selectedStudentId} onSubjectClick={navigateToSubject} />;
       case 'admin':
         return <AdminDashboard />;
+      case 'login':
+        return <Login />;
       default:
         return <DetailedStats onSubjectClick={navigateToSubject} />;
     }
@@ -235,7 +236,16 @@ export default function App() {
                 <p className="text-sm font-bold text-slate-100 group-hover:text-blue-400 transition-colors uppercase">{currentStudent.name}</p>
                 <p className="text-[10px] text-slate-400 font-bold tracking-tight">{currentStudent.class} {currentStudent.number}번</p>
               </div>
-              {user && !user.isAnonymous && (
+              {!user && !isLegacyAdmin && (
+                 <button 
+                   onClick={() => setActiveTab('login')}
+                   className="h-10 w-10 bg-white/5 text-slate-500 rounded-full flex items-center justify-center border border-white/10 shadow-sm hover:bg-white/10 hover:text-blue-400 transition-all"
+                   title="관리자 로그인"
+                 >
+                    <User size={20} />
+                 </button>
+              )}
+              {(user || isLegacyAdmin) && (
                 <button 
                   onClick={signOut}
                   className="h-10 w-10 bg-blue-600/20 text-blue-400 rounded-full flex items-center justify-center border border-white/10 shadow-sm ring-1 ring-blue-500/20 hover:bg-red-500/20 hover:text-red-400 transition-all"
@@ -243,15 +253,6 @@ export default function App() {
                 >
                   <LogOut size={20} />
                 </button>
-              )}
-              {user?.isAnonymous && (
-                 <button 
-                   onClick={signIn}
-                   className="h-10 w-10 bg-white/5 text-slate-500 rounded-full flex items-center justify-center border border-white/10 shadow-sm hover:bg-white/10 hover:text-blue-400 transition-all"
-                   title="관리자 로그인"
-                 >
-                    <User size={20} />
-                 </button>
               )}
             </div>
           </div>

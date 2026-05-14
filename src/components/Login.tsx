@@ -5,7 +5,7 @@ import { LogIn, GraduationCap, ShieldCheck, Database, School } from 'lucide-reac
 import { useFirebase } from '../lib/FirebaseContext';
 
 export default function Login() {
-  const { signIn } = useFirebase();
+  const { signIn, adminLogin } = useFirebase();
 
   return (
     <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 relative overflow-hidden">
@@ -43,13 +43,58 @@ export default function Login() {
           ))}
         </div>
 
-        <button
-          onClick={signIn}
-          className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-white text-[#0f172a] rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-50 transition-all shadow-[0_10px_30px_rgba(255,255,255,0.1)] group"
-        >
-          <LogIn size={20} className="group-hover:translate-x-1 transition-transform" />
-          구글 계정으로 시작하기
-        </button>
+        <div className="space-y-4">
+          <button
+            onClick={signIn}
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-white text-[#0f172a] rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-50 transition-all shadow-[0_10px_30px_rgba(255,255,255,0.1)] group"
+          >
+            <LogIn size={20} className="group-hover:translate-x-1 transition-transform" />
+            구글 계정으로 시작하기
+          </button>
+
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/10"></div>
+            </div>
+            <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
+              <span className="bg-[#0f172a] px-3 text-slate-600">또는 관리자 로그인</span>
+            </div>
+          </div>
+
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const id = formData.get('adminId') as string;
+              const pw = formData.get('adminPw') as string;
+              if (adminLogin(id, pw)) {
+                // Success - the context will update and App will redirect
+              } else {
+                alert("아이디 또는 비밀번호가 일치하지 않습니다.");
+              }
+            }}
+            className="space-y-3"
+          >
+            <input 
+              name="adminId"
+              type="text" 
+              placeholder="관리자 ID" 
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-blue-500/50 text-white text-sm"
+            />
+            <input 
+              name="adminPw"
+              type="password" 
+              placeholder="비밀번호" 
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-blue-500/50 text-white text-sm"
+            />
+            <button 
+              type="submit"
+              className="w-full py-3 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-lg shadow-blue-500/10"
+            >
+              관리자 계정 접속
+            </button>
+          </form>
+        </div>
 
         <p className="text-[10px] text-slate-500 text-center font-bold tracking-tight">
           학교 웹메일(@yeosu.hs.kr) 또는 개인 구글 계정으로 로그인하세요.
