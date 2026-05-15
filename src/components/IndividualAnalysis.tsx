@@ -105,10 +105,12 @@ export default function IndividualAnalysis({ selectedStudentId, onSubjectClick }
   const { g1_1_9, g1_2_9, g2_1_9, totalAvg9, g1_1_5, g1_2_5, g2_1_5, totalAvg5 } = stats;
 
   const predictions = useMemo(() => {
-    if (!totalAvg9 || !ADMISSIONS) return { upward: [], proper: [], downward: [] };
+    if (!totalAvg9 || !ADMISSIONS || ADMISSIONS.length === 0) return { upward: [], proper: [], downward: [] };
 
     const getClosest = (list: any[], target: number, count: number) => {
-      return [...list].sort((a, b) => Math.abs(a.admissionGrade - target) - Math.abs(b.admissionGrade - target)).slice(0, count);
+      // If the filtered list is empty, fallback to the entire admissions database
+      const sourceList = list.length > 0 ? list : ADMISSIONS;
+      return [...sourceList].sort((a, b) => Math.abs(a.admissionGrade - target) - Math.abs(b.admissionGrade - target)).slice(0, count);
     };
 
     // 상향: totalAvg9 - 0.7 <= admissionGrade <= totalAvg9 AND admissionType === '충원합격'
@@ -118,7 +120,8 @@ export default function IndividualAnalysis({ selectedStudentId, onSubjectClick }
       adm.admissionType === '충원합격'
     );
     if (upward.length < 3) {
-      upward = getClosest(ADMISSIONS.filter(adm => adm.admissionGrade < totalAvg9), totalAvg9 - 0.5, 3);
+      const candidates = ADMISSIONS.filter(adm => adm.admissionGrade < totalAvg9);
+      upward = getClosest(candidates, totalAvg9 - 0.5, 3);
     } else {
       upward = upward.slice(0, 3);
     }
@@ -142,12 +145,13 @@ export default function IndividualAnalysis({ selectedStudentId, onSubjectClick }
       adm.admissionType === '합격'
     );
     if (downward.length < 3) {
-      downward = getClosest(ADMISSIONS.filter(adm => adm.admissionGrade > totalAvg9), totalAvg9 + 0.5, 3);
+      const candidates = ADMISSIONS.filter(adm => adm.admissionGrade > totalAvg9);
+      downward = getClosest(candidates, totalAvg9 + 0.5, 3);
     } else {
       downward = downward.slice(0, 3);
     }
 
-    return { upward: upward.slice(0, 3), proper: proper.slice(0, 3), downward: downward.slice(0, 3) };
+    return { upward, proper, downward };
   }, [totalAvg9, ADMISSIONS]);
 
   // AI Feedback generation
@@ -510,8 +514,9 @@ export default function IndividualAnalysis({ selectedStudentId, onSubjectClick }
           <div className="grid grid-cols-3 gap-3">
             {/* 상향 */}
             <div className="space-y-1.5">
-              <div className="px-1">
+              <div className="px-1 flex items-baseline justify-between">
                 <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest">상향 (Upward)</span>
+                <span className="text-[7px] text-slate-500 font-bold">{(totalAvg9 - 0.7).toFixed(2)}~{totalAvg9.toFixed(2)}</span>
               </div>
               <div className="space-y-1">
                 {predictions.upward.length > 0 ? predictions.upward.map(adm => (
@@ -535,8 +540,9 @@ export default function IndividualAnalysis({ selectedStudentId, onSubjectClick }
 
             {/* 적정 */}
             <div className="space-y-1.5">
-              <div className="px-1">
+              <div className="px-1 flex items-baseline justify-between">
                 <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">적정 (Proper)</span>
+                <span className="text-[7px] text-slate-500 font-bold">{(totalAvg9 - 0.3).toFixed(2)}~{(totalAvg9 + 0.3).toFixed(2)}</span>
               </div>
               <div className="space-y-1">
                 {predictions.proper.length > 0 ? predictions.proper.map(adm => (
@@ -560,8 +566,9 @@ export default function IndividualAnalysis({ selectedStudentId, onSubjectClick }
 
             {/* 하향 */}
             <div className="space-y-1.5">
-              <div className="px-1">
+              <div className="px-1 flex items-baseline justify-between">
                 <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">하향 (Downward)</span>
+                <span className="text-[7px] text-slate-500 font-bold">{totalAvg9.toFixed(2)}~{(totalAvg9 + 0.7).toFixed(2)}</span>
               </div>
               <div className="space-y-1">
                 {predictions.downward.length > 0 ? predictions.downward.map(adm => (
