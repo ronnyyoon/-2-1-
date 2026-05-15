@@ -7,19 +7,31 @@ export interface FeedbackResult {
   trendAnalysis: string;
 }
 
-const getAiModel = (modelName: string = "gemini-1.5-flash-latest") => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (window as any).GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("AI 분석을 위한 API Key가 설정되지 않았습니다. (VITE_GEMINI_API_KEY 확인 필요)");
+const getAiModel = (modelName: string = "gemini-1.5-flash") => {
+  // Try multiple ways to get the API Key
+  const apiKey = 
+    import.meta.env.VITE_GEMINI_API_KEY || 
+    (window as any).VITE_GEMINI_API_KEY || 
+    (window as any).GEMINI_API_KEY;
+
+  if (!apiKey || apiKey === "undefined" || apiKey === "null") {
+    console.error("[GEMINI] API Key not found in environment variables.");
+    throw new Error("GEMINI_API_KEY_MISSING");
   }
-  const genAI = new GoogleGenerativeAI(apiKey);
-  console.log(`[GEMINI] Initializing with model: ${modelName}`);
-  return genAI.getGenerativeModel({ 
-    model: modelName,
-    generationConfig: {
-      responseMimeType: "application/json",
-    }
-  });
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    console.log(`[GEMINI] Initializing with model: ${modelName}`);
+    return genAI.getGenerativeModel({ 
+      model: modelName,
+      generationConfig: {
+        responseMimeType: "application/json",
+      }
+    });
+  } catch (err) {
+    console.error("[GEMINI] Initialization failed:", err);
+    throw new Error("GEMINI_INIT_FAILED");
+  }
 };
 
 export async function generateStudentFeedback(
@@ -68,26 +80,22 @@ export async function generateStudentFeedback(
 
   try {
     console.log(`[CLIENT] Requesting AI Analysis for: ${studentName}`);
-    try {
-      return await generateWithModel("gemini-1.5-flash-latest");
-    } catch (error: any) {
-      // If 404, try a different model alias
-      if (error.message?.includes("404") || error.message?.includes("not found")) {
-        console.warn("[GEMINI] 1.5-flash-latest failed with 404, trying gemini-1.5-flash...");
-        return await generateWithModel("gemini-1.5-flash");
-      }
-      throw error;
-    }
+    // Use gemini-1.5-flash as the primary model - highly available and fast
+    return await generateWithModel("gemini-1.5-flash");
   } catch (error: any) {
     console.error("AI Client Side Analysis error:", error);
     
     let userMessage = error.message;
-    if (error.message?.includes("API_KEY_INVALID")) {
-      userMessage = "API Key가 유효하지 않습니다. 설정을 확인해 주세요.";
-    } else if (error.message?.includes("quota")) {
-      userMessage = "AI 분석 요청량이 너무 많습니다. 잠시 후 다시 시도해 주세요.";
+    if (error.message === "GEMINI_API_KEY_MISSING") {
+      userMessage = "설정된 AI API Key를 찾을 수 없습니다. (VITE_GEMINI_API_KEY 환경변수 미감지)";
+    } else if (error.message === "GEMINI_INIT_FAILED") {
+      userMessage = "AI 서비스 초기화에 실패했습니다. API Key 형식을 확인해 주세요.";
+    } else if (error.message?.includes("API_KEY_INVALID")) {
+      userMessage = "입력된 API Key가 유효하지 않습니다. (Invalid API Key)";
+    } else if (error.message?.includes("quota") || error.message?.includes("429")) {
+      userMessage = "AI 분석 요청 가능량을 초과했습니다. 잠시 후 재시도해 주세요.";
     } else if (error.message?.includes("404")) {
-      userMessage = "AI 모델을 찾을 수 없습니다. API Key가 해당 모델을 지원하는지 확인해 주세요. (404 Error)";
+      userMessage = "선택한 AI 모델을 사용할 수 없는 지역이거나 모델명이 변경되었습니다. (404 Error)";
     }
     
     throw new Error(userMessage);
