@@ -15,9 +15,18 @@ app.use(express.json());
 const getAi = () => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
+    console.error("DEBUG: GEMINI_API_KEY is missing from process.env");
     throw new Error("GEMINI_API_KEY environment variable is required");
   }
-  return new GoogleGenAI(apiKey);
+  console.log("DEBUG: GEMINI_API_KEY is present");
+  return new GoogleGenAI({
+    apiKey: apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
 };
 
 // API routes
@@ -26,7 +35,6 @@ app.post("/api/generate-feedback", async (req, res) => {
     const { studentName, history, current, subjectDetails } = req.body;
     
     const ai = getAi();
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
       학생 이름: ${studentName}
@@ -51,8 +59,18 @@ app.post("/api/generate-feedback", async (req, res) => {
       }
     `;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+      }
+    });
+
+    const text = response.text;
+    if (!text) {
+      throw new Error("No text response from AI");
+    }
     
     let parsedResult;
     try {

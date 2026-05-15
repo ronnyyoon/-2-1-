@@ -2,5 +2,5 @@
   "name": "여수고등학교 2학년 성적예측 시스템",
   "description": "여수고등학교 2학년 학생들을 위한 내신 성적 분석 및 예측 전문 플랫폼",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

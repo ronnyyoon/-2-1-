@@ -179,7 +179,15 @@ export default function IndividualAnalysis({ selectedStudentId, onSubjectClick }
       setAiError(null);
     } catch (error: any) {
       console.error("AI Analysis Failed:", error);
-      setAiError("현재 AI 분석 요청이 너무 많습니다. 잠시 후 '분석 시작하기'를 다시 눌러주세요.");
+      // If the error message contains specific info like missing API key, show that.
+      // Otherwise fallback to a friendly message.
+      if (error.message?.includes("API_KEY")) {
+        setAiError("시스템 관리자에게 문의하세요: AI 서비스(API Key) 설정이 누락되었습니다.");
+      } else if (error.message?.includes("429") || error.message?.toLowerCase().includes("quota")) {
+        setAiError("현재 AI 분석 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
+      } else {
+        setAiError(error.message || "분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+      }
     } finally {
       setIsAiLoading(false);
     }
