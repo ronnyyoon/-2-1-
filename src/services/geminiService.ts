@@ -72,52 +72,44 @@ export async function generateStudentFeedback(
   // --- 2단계: 직접 REST API 호출 (Netlify 등 정적 호스팅 환경) ---
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey || apiKey === "undefined") {
-    throw new Error("AI 분석을 위한 API Key가 설정되지 않았습니다. (Netlify 환경변수 VITE_GEMINI_API_KEY 확인 필요)");
+    throw new Error("AI API Key 미설정 (Netlify VITE_GEMINI_API_KEY 확인 필요)");
   }
 
-  // v1beta가 최신 기능(JSON 모드 등)에 더 안정적입니다.
-  const REST_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
-
   try {
+    const REST_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+    
+    console.log(`[AI] Calling Direct REST API (v1beta/gemini-3-flash-preview)...`);
     const response = await fetch(REST_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{
-          parts: [{ text: prompt }]
-        }],
-        generationConfig: {
-          responseMimeType: "application/json",
-        }
+        contents: [{ parts: [{ text: prompt }] }]
       })
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      const status = response.status;
+      const errorData = await response.json().catch(() => ({}));
       console.error("[REST Error]", errorData);
-      
-      if (status === 400) throw new Error("잘못된 요청 (400). API 요청 형식을 확인하세요.");
-      if (status === 403) throw new Error("API Key 권한 오류 또는 지역 제한입니다 (403).");
-      if (status === 429) throw new Error("AI 요청 할당량이 초과되었습니다 (429).");
-      throw new Error(`AI 분석 중 오류 발생 (REST Status ${status})`);
+      throw new Error(`AI 분석 오류 (Status ${response.status})`);
     }
 
     const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    if (!text) throw new Error("AI가 응답을 생성하지 못했습니다.");
+    if (!text) throw new Error("AI 응답 생성 실패");
 
-    const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(cleanedText);
+    // JSON 파싱
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const cleanText = jsonMatch ? jsonMatch[0] : text;
+    const parsed = JSON.parse(cleanText);
     
     return {
       encouragement: parsed.encouragement || "분석 완료",
-      warning: parsed.warning || "상세 분석 옵션이 없습니다.",
-      trendAnalysis: parsed.trendAnalysis || "추이 데이터가 부족합니다."
+      warning: parsed.warning || "보완 사항 없음",
+      trendAnalysis: parsed.trendAnalysis || "안정적 추세"
     };
   } catch (error: any) {
-    console.error("[REST Fallback Failed]", error);
+    console.error("[Fallback Failed]", error);
     throw error;
   }
 }

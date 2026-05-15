@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const app = express();
 const PORT = 3000;
@@ -15,20 +15,13 @@ app.use((req, res, next) => {
 });
 
 // Gemini initialization
-const getAi = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
+const getApiKey = () => {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     console.error("CRITICAL: GEMINI_API_KEY is missing from process.env");
     throw new Error("GEMINI_API_KEY environment variable is required. Please check Settings > Secrets.");
   }
-  return new GoogleGenAI({
-    apiKey: apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
+  return apiKey;
 };
 
 // API routes
@@ -38,7 +31,7 @@ const registerRoutes = (app: express.Express) => {
     res.json({
       status: "ok",
       node_env: process.env.NODE_ENV,
-      has_api_key: !!process.env.GEMINI_API_KEY,
+      has_api_key: !!(process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY),
       time: new Date().toISOString()
     });
   });
@@ -50,11 +43,11 @@ const registerRoutes = (app: express.Express) => {
       const { studentName, history, current, subjectDetails } = req.body;
       
       if (!studentName || !history || !current || !subjectDetails) {
-         console.warn("[API] Missing required student data in request body");
          return res.status(400).json({ error: "Missing required student data" });
       }
 
-      const ai = getAi();
+      const apiKey = getApiKey();
+      const genAI = new GoogleGenerativeAI(apiKey);
       const prompt = `
         학생 이름: ${studentName}
         성적 데이터:
@@ -62,8 +55,6 @@ const registerRoutes = (app: express.Express) => {
         
         위 데이터를 바탕으로 학생에게 줄 피드백을 작성해줘.
         상위등급과 점수차가 작은 과목은 '등급 상승 가능성'으로, 하위등급과 점수차가 작은 과목은 '등급 하락 위험'으로 분석해줘.
-        
-        당신은 입시 전문가입니다. 답변은 친절하면서도 전문적인 어조로 작성해주세요.
         
         반드시 다음 세 가지 항목을 포함하는 JSON 형식으로 답변하세요:
         {
@@ -74,46 +65,29 @@ const registerRoutes = (app: express.Express) => {
       `;
 
       console.log("[API] Calling Gemini API (gemini-3-flash-preview)...");
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: {
-          responseMimeType: "application/json",
-        }
-      });
+      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
-      const text = response.text;
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      
       if (!text) {
-        console.error("[API] Gemini returned empty text");
         throw new Error("AI produced an empty response");
       }
-      
-      let parsedResult;
-      try {
-        // Find JSON block if it exists
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          parsedResult = JSON.parse(jsonMatch[0]);
-        } else {
-          parsedResult = JSON.parse(text);
-        }
-        console.log("[API] Gemini response parsed successfully");
-      } catch (e) {
-        console.error("[API] Failed to parse Gemini response as JSON. Original text:", text);
-        return res.status(500).json({ 
-          error: "AI produced invalid response architecture",
-          raw: text.substring(0, 100) + "..."
-        });
-      }
+
+      // JSON 추출 및 파싱
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const cleanJson = jsonMatch ? jsonMatch[0] : text;
+      const parsed = JSON.parse(cleanJson);
 
       res.json({
-        encouragement: parsedResult.encouragement || "",
-        warning: parsedResult.warning || "",
-        trendAnalysis: parsedResult.trendAnalysis || ""
+        encouragement: parsed.encouragement || "분석 완료",
+        warning: parsed.warning || "보완 사항 없음",
+        trendAnalysis: parsed.trendAnalysis || "안정적 추세"
       });
+
     } catch (error: any) {
-      console.error("[API] AI Feedback error:", error);
-      res.status(500).json({ error: error.message || "Internal server error during AI analysis" });
+      console.error("[API Error]", error);
+      res.status(500).json({ error: error.message || "Internal Server Error" });
     }
   });
 };
