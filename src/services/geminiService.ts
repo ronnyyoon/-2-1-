@@ -26,8 +26,24 @@ export async function generateStudentFeedback(
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to generate feedback");
+      let errorMessage = "Failed to generate feedback";
+      try {
+        const text = await response.text();
+        try {
+          const errorData = JSON.parse(text);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // Not JSON, check if it's HTML
+          if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+            errorMessage = "서버 설정 문제로 인해 분석을 완료할 수 없습니다. (HTML response received)";
+          } else {
+            errorMessage = text || errorMessage;
+          }
+        }
+      } catch (e) {
+        errorMessage = `Error ${response.status}: ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
 
     return await response.json();

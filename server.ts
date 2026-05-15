@@ -2,23 +2,25 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
 
+// API logging middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 // Gemini initialization
 const getAi = () => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.error("DEBUG: GEMINI_API_KEY is missing from process.env");
-    throw new Error("GEMINI_API_KEY environment variable is required");
+    console.error("CRITICAL: GEMINI_API_KEY is missing from process.env");
+    throw new Error("GEMINI_API_KEY environment variable is required. Please check Settings > Secrets.");
   }
-  console.log("DEBUG: GEMINI_API_KEY is present");
   return new GoogleGenAI({
     apiKey: apiKey,
     httpOptions: {
@@ -29,13 +31,26 @@ const getAi = () => {
   });
 };
 
-// API routes
+// Diagnostic endpoint
+app.get("/api/diag", (req, res) => {
+  res.json({
+    status: "ok",
+    node_env: process.env.NODE_ENV,
+    has_api_key: !!process.env.GEMINI_API_KEY,
+    time: new Date().toISOString()
+  });
+});
+
+// AI Feedback route
 app.post("/api/generate-feedback", async (req, res) => {
   try {
     const { studentName, history, current, subjectDetails } = req.body;
     
-    const ai = getAi();
+    if (!studentName || !history || !current || !subjectDetails) {
+       return res.status(400).json({ error: "Missing required student data" });
+    }
 
+    const ai = getAi();
     const prompt = `
       학생 이름: ${studentName}
       성적 데이터:
@@ -51,7 +66,7 @@ app.post("/api/generate-feedback", async (req, res) => {
       
       당신은 입시 전문가입니다. 답변은 친절하면서도 전문적인 어조로 작성해주세요.
       
-      반드시 다음 세 가지 항목을 포함하는 JSON 형식으로만 답변하세요:
+      반드시 다음 세 가지 항목을 포함하는 JSON 형식으로 답변하세요:
       {
         "encouragement": "격려 메시지",
         "warning": "경고/보완책 메시지",
@@ -59,11 +74,18 @@ app.post("/api/generate-feedback", async (req, res) => {
       }
     `;
 
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+      }
+    });
+
+    const text = response.text;
     if (!text) {
-      throw new Error("No text response from AI");
+      console.error("Gemini returned empty text");
+      throw new Error("AI produced an empty response");
     }
     
     let parsedResult;
@@ -77,8 +99,10 @@ app.post("/api/generate-feedback", async (req, res) => {
       }
     } catch (e) {
       console.error("Failed to parse Gemini response as JSON. Original text:", text);
-      res.status(500).json({ error: "AI produced invalid response architecture" });
-      return;
+      return res.status(500).json({ 
+        error: "AI produced invalid response architecture",
+        raw: text.substring(0, 100) + "..."
+      });
     }
 
     res.json({
@@ -87,19 +111,29 @@ app.post("/api/generate-feedback", async (req, res) => {
       trendAnalysis: parsedResult.trendAnalysis || ""
     });
   } catch (error: any) {
-    console.error("AI Feedback error:", error);
-    res.status(500).json({ error: error.message });
+    console.error("AI Feedback route error:", error);
+    // Propagate meaningful error if it's from Gemini
+    res.status(500).json({ error: error.message || "Internal server error during AI analysis" });
   }
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+  const isProd = process.env.NODE_ENV === "production";
+  console.log(`[INIT] Starting server. NODE_ENV: ${process.env.NODE_ENV}, isProd: ${isProd}`);
+  
+  if (!isProd) {
+    console.log("[INIT] Using Vite middleware (Development)");
+    try {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.error("[INIT] Failed to create Vite server:", e);
+    }
   } else {
+    console.log("[INIT] Serving static files (Production)");
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
@@ -108,8 +142,11 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`[BOOT] Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
+});
