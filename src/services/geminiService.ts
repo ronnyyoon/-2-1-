@@ -26,23 +26,25 @@ export async function generateStudentFeedback(
     });
 
     if (!response.ok) {
-      let errorMessage = `AI Analysis failed (Status ${response.status})`;
+      let errorMessage = `AI 분석 서비스 오류 (Status ${response.status})`;
       try {
         const text = await response.text();
         if (text) {
-          try {
-            const errorData = JSON.parse(text);
-            errorMessage = errorData.error || errorMessage;
-          } catch (e) {
-            if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
-              errorMessage = "서버 설정 오작동 (HTML 응답 수신). 페이지를 매뉴얼로 새로고침 해보세요.";
-            } else {
-              errorMessage = text.substring(0, 100);
+          if (response.status === 404) {
+            errorMessage = "API 경로를 찾을 수 없습니다. (404 Error)";
+          } else if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+            errorMessage = "서버 설정 오작동 (HTML 응답 수신). 페이지를 완전히 새로고침 해보세요.";
+          } else {
+            try {
+              const errorData = JSON.parse(text);
+              errorMessage = errorData.error || errorMessage;
+            } catch (e) {
+              errorMessage = text.substring(0, 150);
             }
           }
         }
       } catch (e) {
-        errorMessage = `Network or server error: ${response.statusText}`;
+        errorMessage = `네트워크 또는 서버 오류: ${response.statusText}`;
       }
       throw new Error(errorMessage);
     }

@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 const app = express();
 const PORT = 3000;
@@ -15,14 +15,20 @@ app.use((req, res, next) => {
 });
 
 // Gemini initialization
-const getAiModel = () => {
+const getAi = () => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.error("CRITICAL: GEMINI_API_KEY is missing from process.env");
     throw new Error("GEMINI_API_KEY environment variable is required. Please check Settings > Secrets.");
   }
-  const genAI = new GoogleGenerativeAI(apiKey);
-  return genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  return new GoogleGenAI({
+    apiKey: apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
 };
 
 // Diagnostic endpoint
@@ -44,19 +50,14 @@ app.post("/api/generate-feedback", async (req, res) => {
        return res.status(400).json({ error: "Missing required student data" });
     }
 
-    const model = getAiModel();
+    const ai = getAi();
     const prompt = `
       학생 이름: ${studentName}
       성적 데이터:
-      - 1학년 1학기 평균: ${history.g1_1}등급 (5등급제)
-      - 1학년 2학기 평균: ${history.g1_2}등급 (5등급제)
-      - 2학년 1학기 예상 평균: ${current.g2_1}등급 (5등급제)
-      
-      과목별 상세 (2학년 1학기):
-      ${subjectDetails.map((s: any) => `- ${s.name}: ${s.grade}등급(5제) / ${s.grade9}등급(9제). (추이: ${s.trend}). 상위등급과 점수차: +${s.upGap}점, 하위등급과 점수차: -${s.downGap}점`).join('\n')}
+      ${JSON.stringify({ history, current, subjectDetails })}
       
       위 데이터를 바탕으로 학생에게 줄 피드백을 작성해줘.
-      특히 '상위등급과 점수차'가 작은 과목은 등급 상승 가능성이 높은 과목으로, '하위등급과 점수차'가 작은 과목은 등급 하락 위험이 있는 과목으로 분석하여 언급해줘.
+      상위등급과 점수차가 작은 과목은 '등급 상승 가능성'으로, 하위등급과 점수차가 작은 과목은 '등급 하락 위험'으로 분석해줘.
       
       당신은 입시 전문가입니다. 답변은 친절하면서도 전문적인 어조로 작성해주세요.
       
@@ -68,8 +69,15 @@ app.post("/api/generate-feedback", async (req, res) => {
       }
     `;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+      }
+    });
+
+    const text = response.text;
     if (!text) {
       console.error("Gemini returned empty text");
       throw new Error("AI produced an empty response");
@@ -123,6 +131,12 @@ async function startServer() {
     console.log("[INIT] Serving static files (Production)");
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
+    // API routes fallthrough protection
+    app.all("/api/*", (req, res) => {
+      console.warn(`[API 404] ${req.method} ${req.url}`);
+      res.status(404).json({ error: `API route not found: ${req.url}` });
+    });
+
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
