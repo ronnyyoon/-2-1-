@@ -31,93 +31,102 @@ const getAi = () => {
   });
 };
 
-// Diagnostic endpoint
-app.get("/api/diag", (req, res) => {
-  res.json({
-    status: "ok",
-    node_env: process.env.NODE_ENV,
-    has_api_key: !!process.env.GEMINI_API_KEY,
-    time: new Date().toISOString()
-  });
-});
-
-// AI Feedback route
-app.post("/api/generate-feedback", async (req, res) => {
-  try {
-    const { studentName, history, current, subjectDetails } = req.body;
-    
-    if (!studentName || !history || !current || !subjectDetails) {
-       return res.status(400).json({ error: "Missing required student data" });
-    }
-
-    const ai = getAi();
-    const prompt = `
-      학생 이름: ${studentName}
-      성적 데이터:
-      ${JSON.stringify({ history, current, subjectDetails })}
-      
-      위 데이터를 바탕으로 학생에게 줄 피드백을 작성해줘.
-      상위등급과 점수차가 작은 과목은 '등급 상승 가능성'으로, 하위등급과 점수차가 작은 과목은 '등급 하락 위험'으로 분석해줘.
-      
-      당신은 입시 전문가입니다. 답변은 친절하면서도 전문적인 어조로 작성해주세요.
-      
-      반드시 다음 세 가지 항목을 포함하는 JSON 형식으로 답변하세요:
-      {
-        "encouragement": "격려 메시지",
-        "warning": "경고/보완책 메시지",
-        "trendAnalysis": "전체적인 추이 분석"
-      }
-    `;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
-    });
-
-    const text = response.text;
-    if (!text) {
-      console.error("Gemini returned empty text");
-      throw new Error("AI produced an empty response");
-    }
-    
-    let parsedResult;
-    try {
-      // Find JSON block if it exists
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        parsedResult = JSON.parse(jsonMatch[0]);
-      } else {
-        parsedResult = JSON.parse(text);
-      }
-    } catch (e) {
-      console.error("Failed to parse Gemini response as JSON. Original text:", text);
-      return res.status(500).json({ 
-        error: "AI produced invalid response architecture",
-        raw: text.substring(0, 100) + "..."
-      });
-    }
-
+// API routes
+const registerRoutes = (app: express.Express) => {
+  // Diagnostic endpoint
+  app.get("/api/diag", (req, res) => {
     res.json({
-      encouragement: parsedResult.encouragement || "",
-      warning: parsedResult.warning || "",
-      trendAnalysis: parsedResult.trendAnalysis || ""
+      status: "ok",
+      node_env: process.env.NODE_ENV,
+      has_api_key: !!process.env.GEMINI_API_KEY,
+      time: new Date().toISOString()
     });
-  } catch (error: any) {
-    console.error("AI Feedback route error:", error);
-    // Propagate meaningful error if it's from Gemini
-    res.status(500).json({ error: error.message || "Internal server error during AI analysis" });
-  }
-});
+  });
+
+  // AI Feedback route
+  app.post(["/api/generate-feedback", "/api/generate-feedback/"], async (req, res) => {
+    console.log(`[API] ${req.method} ${req.url} - Request received`);
+    try {
+      const { studentName, history, current, subjectDetails } = req.body;
+      
+      if (!studentName || !history || !current || !subjectDetails) {
+         console.warn("[API] Missing required student data in request body");
+         return res.status(400).json({ error: "Missing required student data" });
+      }
+
+      const ai = getAi();
+      const prompt = `
+        학생 이름: ${studentName}
+        성적 데이터:
+        ${JSON.stringify({ history, current, subjectDetails })}
+        
+        위 데이터를 바탕으로 학생에게 줄 피드백을 작성해줘.
+        상위등급과 점수차가 작은 과목은 '등급 상승 가능성'으로, 하위등급과 점수차가 작은 과목은 '등급 하락 위험'으로 분석해줘.
+        
+        당신은 입시 전문가입니다. 답변은 친절하면서도 전문적인 어조로 작성해주세요.
+        
+        반드시 다음 세 가지 항목을 포함하는 JSON 형식으로 답변하세요:
+        {
+          "encouragement": "격려 메시지",
+          "warning": "경고/보완책 메시지",
+          "trendAnalysis": "전체적인 추이 분석"
+        }
+      `;
+
+      console.log("[API] Calling Gemini API...");
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+        }
+      });
+
+      const text = response.text;
+      if (!text) {
+        console.error("[API] Gemini returned empty text");
+        throw new Error("AI produced an empty response");
+      }
+      
+      let parsedResult;
+      try {
+        // Find JSON block if it exists
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsedResult = JSON.parse(jsonMatch[0]);
+        } else {
+          parsedResult = JSON.parse(text);
+        }
+        console.log("[API] Gemini response parsed successfully");
+      } catch (e) {
+        console.error("[API] Failed to parse Gemini response as JSON. Original text:", text);
+        return res.status(500).json({ 
+          error: "AI produced invalid response architecture",
+          raw: text.substring(0, 100) + "..."
+        });
+      }
+
+      res.json({
+        encouragement: parsedResult.encouragement || "",
+        warning: parsedResult.warning || "",
+        trendAnalysis: parsedResult.trendAnalysis || ""
+      });
+    } catch (error: any) {
+      console.error("[API] AI Feedback error:", error);
+      res.status(500).json({ error: error.message || "Internal server error during AI analysis" });
+    }
+  });
+};
 
 async function startServer() {
   const isProd = process.env.NODE_ENV === "production";
-  console.log(`[INIT] Starting server. NODE_ENV: ${process.env.NODE_ENV}, isProd: ${isProd}`);
+  console.log(`[BOOT] NODE_ENV: ${process.env.NODE_ENV}, isProd: ${isProd}`);
   
+  // Register API routes BEFORE static/fallback
+  registerRoutes(app);
+
   if (!isProd) {
-    console.log("[INIT] Using Vite middleware (Development)");
+    console.log("[BOOT] Using Vite middleware (Development)");
     try {
       const vite = await createViteServer({
         server: { middlewareMode: true },
@@ -125,16 +134,17 @@ async function startServer() {
       });
       app.use(vite.middlewares);
     } catch (e) {
-      console.error("[INIT] Failed to create Vite server:", e);
+      console.error("[BOOT] Failed to create Vite server:", e);
     }
   } else {
-    console.log("[INIT] Serving static files (Production)");
+    console.log("[BOOT] Serving static files (Production)");
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    // API routes fallthrough protection
+    
+    // API routes fallthrough catch-all (placed after explicit routes)
     app.all("/api/*", (req, res) => {
-      console.warn(`[API 404] ${req.method} ${req.url}`);
-      res.status(404).json({ error: `API route not found: ${req.url}` });
+      console.warn(`[BOOT] API Route Not Found: ${req.method} ${req.url}`);
+      res.status(404).json({ error: `Route ${req.method} ${req.url} not found on this server.` });
     });
 
     app.get("*", (req, res) => {
@@ -143,7 +153,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[BOOT] Server running on http://0.0.0.0:${PORT}`);
+    console.log(`[BOOT] Server listening on http://0.0.0.0:${PORT}`);
   });
 }
 

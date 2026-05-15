@@ -12,7 +12,9 @@ export async function generateStudentFeedback(
   subjectDetails: { name: string; grade: number; grade9: number; upGap: number; downGap: number; trend: 'up' | 'down' | 'stable' }[]
 ): Promise<FeedbackResult> {
   try {
-    const response = await fetch("/api/generate-feedback", {
+    const apiPath = "/api/generate-feedback";
+    console.log(`[FRONTEND] Calling AI Analysis at: ${apiPath}`);
+    const response = await fetch(apiPath, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
