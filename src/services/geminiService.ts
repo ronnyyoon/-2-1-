@@ -26,22 +26,23 @@ export async function generateStudentFeedback(
     });
 
     if (!response.ok) {
-      let errorMessage = "Failed to generate feedback";
+      let errorMessage = `AI Analysis failed (Status ${response.status})`;
       try {
         const text = await response.text();
-        try {
-          const errorData = JSON.parse(text);
-          errorMessage = errorData.error || errorMessage;
-        } catch (e) {
-          // Not JSON, check if it's HTML
-          if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
-            errorMessage = "서버 설정 문제로 인해 분석을 완료할 수 없습니다. (HTML response received)";
-          } else {
-            errorMessage = text || errorMessage;
+        if (text) {
+          try {
+            const errorData = JSON.parse(text);
+            errorMessage = errorData.error || errorMessage;
+          } catch (e) {
+            if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+              errorMessage = "서버 설정 오작동 (HTML 응답 수신). 페이지를 매뉴얼로 새로고침 해보세요.";
+            } else {
+              errorMessage = text.substring(0, 100);
+            }
           }
         }
       } catch (e) {
-        errorMessage = `Error ${response.status}: ${response.statusText}`;
+        errorMessage = `Network or server error: ${response.statusText}`;
       }
       throw new Error(errorMessage);
     }

@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const app = express();
 const PORT = 3000;
@@ -15,20 +15,14 @@ app.use((req, res, next) => {
 });
 
 // Gemini initialization
-const getAi = () => {
+const getAiModel = () => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.error("CRITICAL: GEMINI_API_KEY is missing from process.env");
     throw new Error("GEMINI_API_KEY environment variable is required. Please check Settings > Secrets.");
   }
-  return new GoogleGenAI({
-    apiKey: apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
+  const genAI = new GoogleGenerativeAI(apiKey);
+  return genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 };
 
 // Diagnostic endpoint
@@ -50,7 +44,7 @@ app.post("/api/generate-feedback", async (req, res) => {
        return res.status(400).json({ error: "Missing required student data" });
     }
 
-    const ai = getAi();
+    const model = getAiModel();
     const prompt = `
       학생 이름: ${studentName}
       성적 데이터:
@@ -74,15 +68,8 @@ app.post("/api/generate-feedback", async (req, res) => {
       }
     `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
-    });
-
-    const text = response.text;
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
     if (!text) {
       console.error("Gemini returned empty text");
       throw new Error("AI produced an empty response");
