@@ -73,10 +73,10 @@ const registerRoutes = (app: express.Express) => {
         }
       `;
 
-      console.log("[API] Calling Gemini API...");
+      console.log("[API] Calling Gemini API (gemini-3-flash-preview)...");
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: prompt,
+        model: "gemini-3-flash-preview",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           responseMimeType: "application/json",
         }
