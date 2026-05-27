@@ -6,6 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
 import DetailedStats from './components/DetailedStats';
+import TopStudentsList from './components/TopStudentsList';
 import ClassGradesList from './components/ClassGradesList';
 import SubjectStats from './components/SubjectStats';
 import IndividualAnalysis from './components/IndividualAnalysis';
@@ -76,6 +77,8 @@ export default function App() {
     switch (activeTab) {
       case 'dashboard':
         return <DetailedStats onSubjectClick={navigateToSubject} />;
+      case 'top-20':
+        return <TopStudentsList onSubjectClick={navigateToSubject} onStudentClick={handleStudentSelect} />;
       case 'class-grades':
         return <ClassGradesList onSubjectClick={navigateToSubject} />;
       case 'subject-stats':

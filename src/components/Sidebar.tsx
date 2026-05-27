@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calculator, LayoutDashboard, Bell, Settings, LogOut, ChevronRight, ListFilter, GraduationCap } from 'lucide-react';
+import { Calculator, LayoutDashboard, Bell, Settings, LogOut, ChevronRight, ListFilter, GraduationCap, Trophy } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { APP_CONFIG } from '@/src/config';
 import { motion } from 'motion/react';
@@ -17,6 +17,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
 
   const menuItems = [
     { id: 'dashboard', label: '전체 일람표', icon: LayoutDashboard },
+    { id: 'top-20', label: '상위20명일람표', icon: Trophy },
     { id: 'class-grades', label: '학반등급일람표', icon: ListFilter },
     { id: 'subject-stats', label: '과목별성적', icon: GraduationCap },
     { id: 'predictor', label: '개인별 성적분석', icon: Calculator },
